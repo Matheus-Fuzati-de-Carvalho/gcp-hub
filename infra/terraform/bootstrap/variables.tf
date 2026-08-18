@@ -13,5 +13,5 @@ variable "region" {
 variable "github_repository" {
   description = "Repositório GitHub autorizado a assumir as identidades (org/repo)."
   type        = string
-  default     = "Matheus-Fuzati-de-Carvalho/observability-hub"
+  default     = "Matheus-Fuzati-de-Carvalho/gcp-hub"
 }
