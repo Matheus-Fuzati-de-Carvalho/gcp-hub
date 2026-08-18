@@ -1,3 +1,17 @@
+import os
+
+# core.config.Settings exige OBSERVABILITY_HUB_ENVIRONMENT e
+# OBSERVABILITY_HUB_RUNTIME_SA_EMAIL (sem default, topologia single-project
+# — ver core/config.py). `settings = Settings()` roda no import do módulo,
+# então isso precisa ser setado antes de qualquer import de
+# observability_hub abaixo, inclusive nos arquivos de teste que importam
+# antes deste conftest terminar de carregar.
+os.environ.setdefault("OBSERVABILITY_HUB_ENVIRONMENT", "dev")
+os.environ.setdefault(
+    "OBSERVABILITY_HUB_RUNTIME_SA_EMAIL",
+    "backend-dev-run@test-project.iam.gserviceaccount.com",
+)
+
 import pytest
 
 from observability_hub.core import bigquery as bigquery_module

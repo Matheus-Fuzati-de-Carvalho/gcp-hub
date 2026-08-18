@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Regiões conhecidas do BigQuery consultadas em paralelo para descobrir
@@ -34,6 +36,20 @@ BQ_REGIONS = [
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OBSERVABILITY_HUB_")
+
+    # Topologia single-project: dev e prod rodam no mesmo projeto GCP, então
+    # o project_id não serve mais pra distinguir ambiente (ver core/secrets.py
+    # ::_is_prod). Sem default — falha rápido no startup se não for injetada
+    # pelo Terraform (module cloud-run, env = { OBSERVABILITY_HUB_ENVIRONMENT
+    # = "dev"/"prod" }) em vez de silenciosamente cair num ambiente errado.
+    environment: Literal["dev", "prod"]
+    # E-mail da própria service account de runtime do Cloud Run, injetado
+    # pelo Terraform (google_service_account.runtime.email, ver módulo
+    # cloud-run) — usado em main.py e domains/access/service.py em vez de
+    # reconstruir o nome a partir de get_client().project + um literal
+    # hardcoded, que quebra em projeto único (dev e prod têm SAs com nomes
+    # diferentes no mesmo projeto: backend-dev-run vs backend-prod-run).
+    runtime_sa_email: str
 
     log_level: str = "INFO"
     region_discovery_max_workers: int = 8

@@ -44,27 +44,17 @@ def test_get_secret_is_cached_per_process():
     assert fake_client.access_secret_version.call_count == 1
 
 
-def test_get_oauth_client_id_uses_dev_suffix_when_not_prod():
-    with (
-        patch(
-            "observability_hub.core.secrets.get_runtime_project",
-            return_value="observability-hub-dev",
-        ),
-        patch("observability_hub.core.secrets.get_secret", return_value="client-id") as mock_get,
-    ):
+def test_get_oauth_client_id_uses_dev_suffix_when_not_prod(monkeypatch):
+    monkeypatch.setattr(secrets.settings, "environment", "dev")
+    with patch("observability_hub.core.secrets.get_secret", return_value="client-id") as mock_get:
         secrets.get_oauth_client_id()
 
     mock_get.assert_called_once_with("GOOGLE_OAUTH_CLIENT_ID_DEV")
 
 
-def test_get_oauth_client_secret_uses_prod_suffix_when_prod():
-    with (
-        patch(
-            "observability_hub.core.secrets.get_runtime_project",
-            return_value="observability-hub-prod",
-        ),
-        patch("observability_hub.core.secrets.get_secret", return_value="secret") as mock_get,
-    ):
+def test_get_oauth_client_secret_uses_prod_suffix_when_prod(monkeypatch):
+    monkeypatch.setattr(secrets.settings, "environment", "prod")
+    with patch("observability_hub.core.secrets.get_secret", return_value="secret") as mock_get:
         secrets.get_oauth_client_secret()
 
     mock_get.assert_called_once_with("GOOGLE_OAUTH_CLIENT_SECRET_PROD")

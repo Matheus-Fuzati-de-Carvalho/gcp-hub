@@ -5,7 +5,7 @@ só chama estas funções — CLAUDE.md proíbe lógica de negócio em api/.
 
 from google.cloud import logging as cloud_logging
 
-from observability_hub.core.bigquery import get_client
+from observability_hub.core.config import settings
 from observability_hub.domains.access import repository
 from observability_hub.domains.access.repository import TableRefTuple
 from observability_hub.domains.access.schemas import TableAccessEntry, TableAccessResponse
@@ -37,15 +37,14 @@ def _is_service_account(principal_email: str) -> bool:
 
 
 def _hub_runtime_sa_email() -> str:
-    """SA de runtime do próprio Hub (Cloud Run, ver core/bigquery.py::
-    get_client() e o mesmo padrão em main.py::handle_project_access_denied) —
-    excluída do mapa de acesso porque toda vez que o usuário roda
-    profiling/PII numa tabela pela UI, é essa SA (não o usuário) quem
-    executa a query real no BigQuery. Sem esse filtro, o próprio ato de
-    inspecionar uma tabela pelo Hub apareceria como "acesso recente" —
-    ruído, não um consumidor real de fora."""
-    runtime_project = get_client().project
-    return f"backend-run@{runtime_project}.iam.gserviceaccount.com"
+    """SA de runtime do próprio Hub (settings.runtime_sa_email, injetada pelo
+    Terraform — ver core/config.py e o mesmo padrão em
+    main.py::handle_project_access_denied) — excluída do mapa de acesso
+    porque toda vez que o usuário roda profiling/PII numa tabela pela UI, é
+    essa SA (não o usuário) quem executa a query real no BigQuery. Sem esse
+    filtro, o próprio ato de inspecionar uma tabela pelo Hub apareceria como
+    "acesso recente" — ruído, não um consumidor real de fora."""
+    return settings.runtime_sa_email
 
 
 def get_table_access(

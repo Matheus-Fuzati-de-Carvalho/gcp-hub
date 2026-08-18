@@ -10,18 +10,22 @@ from functools import lru_cache
 from google.cloud import secretmanager
 
 from observability_hub.core.bigquery import get_runtime_project
+from observability_hub.core.config import settings
 
 # GOOGLE_OAUTH_CLIENT_ID/SECRET têm um secret por ambiente (_DEV/_PROD) —
 # são OAuth clients distintos no Google Cloud Console, um por conjunto de
 # URLs de callback registradas. JWT_SECRET e OAUTH_ALLOWLIST usam o mesmo
-# nome (e valor) nos dois projetos.
-_DEV_SUFFIX = "-dev"
-_PROD_SUFFIX = "-prod"
+# nome (e valor) nos dois ambientes — como dev e prod estão no mesmo
+# projeto (topologia single-project deste repositório), é literalmente o
+# mesmo secret do Secret Manager, não uma cópia por projeto.
 
 
 @lru_cache
 def _is_prod() -> bool:
-    return get_runtime_project().endswith(_PROD_SUFFIX)
+    # Ambiente é sempre explícito (settings.environment, injetado via
+    # OBSERVABILITY_HUB_ENVIRONMENT pelo Terraform) — nunca inferido do
+    # project_id, que é idêntico pros dois ambientes neste repositório.
+    return settings.environment == "prod"
 
 
 @lru_cache

@@ -19,7 +19,6 @@ from observability_hub.api.v1 import (
     quality,
     storage,
 )
-from observability_hub.core.bigquery import get_client
 from observability_hub.core.config import settings
 from observability_hub.core.exceptions import (
     AccessRequestNotFoundError,
@@ -79,10 +78,11 @@ def health() -> dict[str, str]:
 
 @app.exception_handler(ProjectAccessDeniedError)
 def handle_project_access_denied(request: Request, exc: ProjectAccessDeniedError) -> JSONResponse:
-    # A SA de fix é a do próprio ambiente em execução (dev ou prod), nunca
-    # hardcoded — client.project reflete o projeto ADC do runtime atual.
-    runtime_project = get_client().project
-    sa_email = f"backend-run@{runtime_project}.iam.gserviceaccount.com"
+    # A SA de fix é a do próprio ambiente em execução (dev ou prod), injetada
+    # pelo Terraform via OBSERVABILITY_HUB_RUNTIME_SA_EMAIL — nunca
+    # reconstruída a partir do project_id, que é o mesmo projeto pros dois
+    # ambientes neste repositório (topologia single-project).
+    sa_email = settings.runtime_sa_email
     # As três roles cobrem os dois modos de acesso que os domínios usam:
     # metadataViewer + jobUser dão conta de INFORMATION_SCHEMA (catalog,
     # freshness, discover_regions); dataViewer é o que profiling precisa a
@@ -109,8 +109,7 @@ def handle_project_access_denied(request: Request, exc: ProjectAccessDeniedError
 
 @app.exception_handler(LoggingAccessDeniedError)
 def handle_logging_access_denied(request: Request, exc: LoggingAccessDeniedError) -> JSONResponse:
-    runtime_project = get_client().project
-    sa_email = f"backend-run@{runtime_project}.iam.gserviceaccount.com"
+    sa_email = settings.runtime_sa_email
     # logging.viewer sozinho basta pra não estourar Forbidden, mas Data
     # Access audit logs (onde vive o jobCompletedEvent que lineage lê) só
     # ficam visíveis via API com logging.privateLogViewer também — sem essa
@@ -135,8 +134,7 @@ def handle_logging_access_denied(request: Request, exc: LoggingAccessDeniedError
 
 @app.exception_handler(StorageAccessDeniedError)
 def handle_storage_access_denied(request: Request, exc: StorageAccessDeniedError) -> JSONResponse:
-    runtime_project = get_client().project
-    sa_email = f"backend-run@{runtime_project}.iam.gserviceaccount.com"
+    sa_email = settings.runtime_sa_email
     # roles/storage.objectViewer sozinha NÃO cobre storage.buckets.list/get
     # (só storage.objects.*) — confirmado em dev 2026-08-17 (403 mesmo com
     # a role concedida). list_buckets() precisa de storage.bucketViewer

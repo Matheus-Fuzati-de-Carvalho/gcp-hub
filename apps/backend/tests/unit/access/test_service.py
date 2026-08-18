@@ -23,11 +23,15 @@ def _event(
 
 def _events(monkeypatch, events, hub_project="hub-proj"):
     monkeypatch.setattr(service.repository, "list_access_events", lambda *a, **kw: events)
-    # get_client() nunca deve ser chamado de verdade em teste unitário —
-    # _hub_runtime_sa_email() só lê .project, então um MagicMock com esse
-    # atributo já basta (ver core/bigquery.py::get_client, singleton via
-    # lru_cache, não usado aqui de outra forma).
-    monkeypatch.setattr(service, "get_client", lambda: MagicMock(project=hub_project))
+    # settings.runtime_sa_email é o e-mail da própria SA de runtime do Hub,
+    # injetado pelo Terraform em produção (ver core/config.py) —
+    # _hub_runtime_sa_email() só lê essa settings, então o teste simula o
+    # valor diretamente em vez de mockar get_client().project.
+    monkeypatch.setattr(
+        service.settings,
+        "runtime_sa_email",
+        f"backend-run@{hub_project}.iam.gserviceaccount.com",
+    )
 
 
 # --- read/write classification ------------------------------------------------
