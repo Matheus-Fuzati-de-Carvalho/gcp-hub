@@ -38,12 +38,14 @@ Depois de executar este playbook, volte lá e registre a linha — ver passo
 
 | Vai ser consultado por... | Service account a liberar |
 |---|---|
-| Uso real (Hub em produção) | `backend-run@observability-hub-prod.iam.gserviceaccount.com` |
-| Teste interno (Hub em dev) | `backend-run@observability-hub-dev.iam.gserviceaccount.com` |
+| Uso real (Hub em produção) | `backend-prod-run@observability-hub.iam.gserviceaccount.com` |
+| Teste interno (Hub em dev) | `backend-dev-run@observability-hub.iam.gserviceaccount.com` |
 
-Se o mesmo projeto alvo vai ser usado tanto em teste quanto em produção,
-rode os passos 3–4 duas vezes, uma por SA. Se o Hub foi hospedado em
-outro par de projetos (ver o outro playbook,
+Dev e prod rodam no mesmo projeto GCP (`observability-hub`, topologia
+single-project — ver `CLAUDE.md`) — o que diferencia as duas service
+accounts é o nome, não o projeto. Se o mesmo projeto alvo vai ser usado
+tanto em teste quanto em produção, rode os passos 3–4 duas vezes, uma
+por SA. Se o Hub foi hospedado em outro projeto (ver o outro playbook,
 [`hospedar-hub-em-novo-projeto.md`](hospedar-hub-em-novo-projeto.md)), o
 e-mail da SA muda de acordo — confirme com
 `gcloud iam service-accounts list --project=<projeto-do-hub>`.
@@ -68,7 +70,7 @@ lineage que usa bucket como nó) — pule se não for o caso.
 ## 4. Conceder as 7 roles IAM à service account do Hub
 
 ```bash
-SA_EMAIL="backend-run@observability-hub-prod.iam.gserviceaccount.com"  # ou -dev
+SA_EMAIL="backend-prod-run@observability-hub.iam.gserviceaccount.com"  # ou backend-dev-run@...
 
 gcloud projects add-iam-policy-binding {PROJECT_ID} \
   --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.metadataViewer"
@@ -193,7 +195,7 @@ BigQuery acima:
    ```bash
    gcloud projects get-iam-policy {PROJECT_ID} \
      --flatten="bindings[].members" \
-     --filter="bindings.members:backend-run@observability-hub-{dev,prod}.iam.gserviceaccount.com" \
+     --filter="bindings.members:${SA_EMAIL}" \
      --format="table(bindings.role)"
    ```
 3. **Teste pela UI do Hub**: logado como um usuário com acesso liberado

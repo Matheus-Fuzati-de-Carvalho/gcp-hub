@@ -2,7 +2,8 @@
 
 **Objetivo:** checklist completo de tudo que precisa ser configurado em um
 projeto GCP "alvo" (projeto de cliente, ou qualquer projeto que não seja
-`observability-hub-dev`/`observability-hub-prod`) para que o Hub consiga
+o próprio projeto onde o Hub roda — `observability-hub`, hospedando dev
+e prod juntos nesta topologia, ver `CLAUDE.md`) para que o Hub consiga
 observá-lo — os oito domínios (catálogo, freshness, profiling/qualidade,
 lineage/tabelas órfãs, fingerprinting de PII, mapa de acesso, FinOps e
 Cloud Storage, ver `CLAUDE.md`) usam exatamente as roles e APIs listadas
@@ -42,8 +43,11 @@ projeto:
 
 | Ambiente do Hub | Service account |
 |---|---|
-| Produção (uso real com cliente) | `backend-run@observability-hub-prod.iam.gserviceaccount.com` |
-| Dev (teste interno) | `backend-run@observability-hub-dev.iam.gserviceaccount.com` |
+| Produção (uso real com cliente) | `backend-prod-run@observability-hub.iam.gserviceaccount.com` |
+| Dev (teste interno) | `backend-dev-run@observability-hub.iam.gserviceaccount.com` |
+
+Dev e prod rodam no mesmo projeto GCP (`observability-hub`) — o que
+diferencia as duas service accounts é o nome, não o projeto.
 
 Roles necessárias — granularidade sempre a nível de **projeto** (nenhum
 domínio hoje opera com IAM a nível de dataset ou tabela):
@@ -67,7 +71,7 @@ domínio hoje opera com IAM a nível de dataset ou tabela):
 > ([doc oficial](https://docs.cloud.google.com/logging/docs/access-control))
 
 ```bash
-SA_EMAIL="backend-run@observability-hub-prod.iam.gserviceaccount.com"  # ou -dev
+SA_EMAIL="backend-prod-run@observability-hub.iam.gserviceaccount.com"  # ou backend-dev-run@...
 
 gcloud projects add-iam-policy-binding {PROJECT_ID} \
   --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.metadataViewer"
@@ -209,11 +213,21 @@ motivo.
 
 ## Registro de acessos concedidos (log vivo)
 
+> **Nota:** o log abaixo foi herdado do repositório de origem
+> (`observability-hub`, topologia com dois projetos GCP separados,
+> `observability-hub-dev`/`observability-hub-prod`) — documenta o
+> histórico de concessões *daquele* par de projetos, não deste
+> repositório single-project. Ainda não há nenhuma concessão registrada
+> no projeto único deste repositório; a primeira entrada real deve ser
+> adicionada na primeira vez que este checklist for seguido aqui (ver
+> `CLAUDE.md`, "Registro de acessos e configurações").
+
 Nenhum projeto de cliente real foi onboardado ainda. As únicas concessões
-cross-project existentes até agora são entre os dois ambientes do próprio
-Hub (`observability-hub-dev` ↔ `observability-hub-prod`), usadas como
-projeto "alvo" de teste um do outro — seguem exatamente este mesmo
-checklist, e servem de precedente real de que o processo funciona.
+cross-project existentes até agora (no repositório de origem) são entre
+os dois ambientes do próprio Hub (`observability-hub-dev` ↔
+`observability-hub-prod`), usadas como projeto "alvo" de teste um do
+outro — seguem exatamente este mesmo checklist, e servem de precedente
+real de que o processo funciona.
 
 | Data | Projeto alvo | SA concedida | O que foi feito | Confirmado via |
 |---|---|---|---|---|
