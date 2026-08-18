@@ -1,0 +1,39 @@
+[project]
+name = "observability-hub-backend"
+version = "0.2.1"
+description = "Backend do Observability Hub (FastAPI)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "google-cloud-bigquery>=3.25",
+    "pydantic-settings>=2.5",
+    "google-cloud-secret-manager>=2.20",
+    "google-cloud-firestore>=2.19",
+    "authlib>=1.3",
+    "python-jose[cryptography]>=3.3",
+    "requests>=2.32",
+    "google-cloud-logging>=3.16.2",
+    "google-cloud-storage>=3.13.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "pytest>=8.3",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# B008: FastAPI usa Depends()/Query() como default de parâmetro de rota —
+# é o padrão idiomático da lib (e o que o CLAUDE.md manda usar), não um erro.
+ignore = ["B008"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/observability_hub"]
