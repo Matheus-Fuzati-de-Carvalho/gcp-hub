@@ -14,10 +14,10 @@ permissions:
   actions: read
 
 env:
-  PROJECT_ID: observability-hub-dev
+  PROJECT_ID: observability-hub
   REGION: us-central1
   REPOSITORY: apps
-  SERVICE: frontend
+  SERVICE: frontend-dev
 
 jobs:
   # O primeiro push que introduz o Cloud Run do frontend cria o serviço via

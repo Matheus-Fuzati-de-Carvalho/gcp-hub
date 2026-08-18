@@ -59,6 +59,15 @@ resource "google_cloud_run_v2_service" "service" {
         }
       }
 
+      # E-mail da própria SA de runtime, injetado automaticamente (não fica a
+      # cargo do caller do módulo) — usado pelo backend em vez de reconstruir
+      # o nome a partir do project_id, que sozinho não distingue dev de prod
+      # na topologia single-project (ver core/config.py::runtime_sa_email).
+      env {
+        name  = "OBSERVABILITY_HUB_RUNTIME_SA_EMAIL"
+        value = google_service_account.runtime.email
+      }
+
       dynamic "env" {
         for_each = var.env
         content {

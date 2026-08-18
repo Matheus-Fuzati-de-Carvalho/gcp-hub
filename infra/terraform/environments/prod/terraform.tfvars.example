@@ -1,2 +1,2 @@
-project_id = "observability-hub-prod"
+project_id = "observability-hub"
 region     = "us-central1"

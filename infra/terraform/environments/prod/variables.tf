@@ -1,7 +1,7 @@
 variable "project_id" {
-  description = "ID do projeto GCP de prod."
+  description = "ID do único projeto GCP, compartilhado com o ambiente dev (topologia single-project deste repositório)."
   type        = string
-  default     = "observability-hub-prod"
+  default     = "observability-hub"
 }
 
 variable "region" {

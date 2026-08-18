@@ -9,7 +9,7 @@ variable "region" {
 }
 
 variable "service_name" {
-  description = "Nome do serviço Cloud Run e prefixo dos recursos relacionados (ex: \"backend\")."
+  description = "Nome do serviço Cloud Run e prefixo dos recursos relacionados (ex: \"backend-dev\"). Sufixado por ambiente porque dev e prod compartilham o mesmo projeto GCP (topologia single-project) — sem o sufixo, os dois ambientes colidiriam no nome do serviço e da SA de runtime."
   type        = string
 }
 

@@ -13,10 +13,10 @@ permissions:
   id-token: write
 
 env:
-  PROJECT_ID: observability-hub-dev
+  PROJECT_ID: observability-hub
   REGION: us-central1
   REPOSITORY: apps
-  SERVICE: backend
+  SERVICE: backend-dev
 
 jobs:
   deploy:

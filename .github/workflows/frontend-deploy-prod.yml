@@ -14,10 +14,10 @@ permissions:
   actions: read
 
 env:
-  PROJECT_ID: observability-hub-prod
+  PROJECT_ID: observability-hub
   REGION: us-central1
   REPOSITORY: apps
-  SERVICE: frontend
+  SERVICE: frontend-prod
 
 jobs:
   # terraform-apply-prod.yml dispara no mesmo push quando o commit também

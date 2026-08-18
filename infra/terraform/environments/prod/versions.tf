@@ -8,10 +8,12 @@ terraform {
     }
   }
 
-  # Nome do bucket vem do output `state_bucket_name` do bootstrap
-  # (infra/terraform/bootstrap/prod). Ver bootstrap/README.md.
+  # Nome do bucket vem do output `state_bucket_name` do bootstrap (único,
+  # compartilhado com dev — topologia single-project). Ver
+  # infra/terraform/bootstrap/README.md. O `prefix` é quem isola o state
+  # de prod do de dev dentro do mesmo bucket.
   backend "gcs" {
-    bucket = "observability-hub-prod-tfstate"
+    bucket = "observability-hub-tfstate"
     prefix = "environments/prod"
   }
 }

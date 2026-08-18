@@ -1,16 +1,6 @@
 variable "project_id" {
-  description = "ID do projeto GCP onde o bootstrap deste ambiente é aplicado."
+  description = "ID do único projeto GCP onde o bootstrap é aplicado (compartilhado por dev e prod)."
   type        = string
-}
-
-variable "environment" {
-  description = "Nome do ambiente (\"dev\" ou \"prod\"). Usado em nomes e descrições de recursos."
-  type        = string
-
-  validation {
-    condition     = contains(["dev", "prod"], var.environment)
-    error_message = "environment deve ser \"dev\" ou \"prod\"."
-  }
 }
 
 variable "region" {
@@ -20,14 +10,20 @@ variable "region" {
 }
 
 variable "github_repository" {
-  description = "Repositório GitHub autorizado a assumir a identidade federada, no formato \"org/repo\"."
+  description = "Repositório GitHub autorizado a assumir as identidades federadas, no formato \"org/repo\"."
   type        = string
 }
 
-variable "restrict_provider_to_ref" {
-  description = "Se definido (ex: \"refs/heads/main\"), só workflows rodando nesse ref do repositório podem se autenticar via este provider. Usado para restringir a identidade de prod à branch main."
-  type        = string
-  default     = null
+variable "deploy_identities" {
+  description = "Uma entrada por ambiente de deploy a criar (ex: \"dev\", \"prod\"). `restrict_to_ref`, se definido (ex: \"refs/heads/main\"), restringe qual ref do repositório pode impersonar essa identidade especificamente — usado pra restringir só o ambiente prod à branch main, mesmo compartilhando pool/provider com dev."
+  type = map(object({
+    restrict_to_ref = optional(string)
+  }))
+
+  validation {
+    condition     = alltrue([for k in keys(var.deploy_identities) : contains(["dev", "prod"], k)])
+    error_message = "As chaves de deploy_identities devem ser \"dev\" e/ou \"prod\"."
+  }
 }
 
 variable "state_bucket_force_destroy" {

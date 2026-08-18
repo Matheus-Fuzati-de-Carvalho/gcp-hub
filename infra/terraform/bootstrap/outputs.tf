@@ -6,6 +6,7 @@ output "workload_identity_provider" {
   value = module.bootstrap.workload_identity_provider
 }
 
-output "service_account_email" {
-  value = module.bootstrap.service_account_email
+output "service_account_emails" {
+  description = "Mapa ambiente -> e-mail (\"dev\" e \"prod\")."
+  value       = module.bootstrap.service_account_emails
 }
