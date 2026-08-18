@@ -13,7 +13,7 @@ terraform {
   # infra/terraform/bootstrap/README.md. O `prefix` é quem isola o state
   # de dev do de prod dentro do mesmo bucket.
   backend "gcs" {
-    bucket = "observability-hub-tfstate"
+    bucket = "gcp-hub-dp6-tfstate"
     prefix = "environments/dev"
   }
 }

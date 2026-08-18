@@ -14,7 +14,7 @@ permissions:
   actions: read
 
 env:
-  PROJECT_ID: observability-hub
+  PROJECT_ID: gcp-hub-dp6
   REGION: us-central1
   REPOSITORY: apps
   SERVICE: frontend-prod
