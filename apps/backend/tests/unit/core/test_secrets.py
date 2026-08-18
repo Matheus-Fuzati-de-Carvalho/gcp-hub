@@ -60,12 +60,24 @@ def test_get_oauth_client_secret_uses_prod_suffix_when_prod(monkeypatch):
     mock_get.assert_called_once_with("GOOGLE_OAUTH_CLIENT_SECRET_PROD")
 
 
-def test_jwt_secret_and_allowlist_use_unsuffixed_names():
-    with patch("observability_hub.core.secrets.get_secret") as mock_get:
-        mock_get.return_value = "shared-secret"
+def test_get_jwt_secret_uses_dev_suffix_when_not_prod(monkeypatch):
+    monkeypatch.setattr(secrets.settings, "environment", "dev")
+    with patch("observability_hub.core.secrets.get_secret", return_value="shhh") as mock_get:
         secrets.get_jwt_secret()
-        mock_get.assert_called_with("JWT_SECRET")
 
+    mock_get.assert_called_once_with("JWT_SECRET_DEV")
+
+
+def test_get_jwt_secret_uses_prod_suffix_when_prod(monkeypatch):
+    monkeypatch.setattr(secrets.settings, "environment", "prod")
+    with patch("observability_hub.core.secrets.get_secret", return_value="shhh") as mock_get:
+        secrets.get_jwt_secret()
+
+    mock_get.assert_called_once_with("JWT_SECRET_PROD")
+
+
+def test_oauth_allowlist_uses_unsuffixed_name():
+    with patch("observability_hub.core.secrets.get_secret") as mock_get:
         mock_get.return_value = json.dumps(
             {"allowed_domains": ["dp6.com.br"], "allowed_emails": []}
         )

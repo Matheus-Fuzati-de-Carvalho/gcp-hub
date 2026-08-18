@@ -1,6 +1,6 @@
 # observability-hub
 
-Plataforma de observabilidade de dados no GCP. Monorepo com backend, frontend e infraestrutura versionados juntos, com dois ambientes (`dev` e `prod`) espelhados por Terraform.
+Plataforma de observabilidade de dados no GCP. Monorepo com backend, frontend e infraestrutura versionados juntos, com dois ambientes (`dev` e `prod`) espelhados por Terraform — **rodando no mesmo projeto GCP** (topologia single-project: a empresa cliente só autoriza um único projeto pra esta aplicação, permanente, não uma fase transitória). O isolamento entre os dois ambientes vem inteiramente de nomes de recurso sufixados por ambiente (Cloud Run, service accounts, Firestore named database), nunca de fronteira de projeto — ver seção "Projetos e ambientes GCP" abaixo.
 
 Este documento é a fonte de verdade das convenções do projeto. Qualquer sessão (humana ou do Claude Code) deve seguir o que está aqui. Se uma convenção mudar, atualize este arquivo no mesmo PR.
 
@@ -31,12 +31,36 @@ Esses oito domínios são a espinha dorsal da estrutura de pastas do backend e d
 
 ## Projetos e ambientes GCP
 
-| Ambiente | Projeto GCP | Branch/gatilho |
-|---|---|---|
-| dev | `observability-hub-dev` | qualquer push em qualquer branch (exceto `main`) |
-| prod | `observability-hub-prod` | merge/push em `main` |
+| Ambiente | Projeto GCP | Serviço Cloud Run | Branch/gatilho |
+|---|---|---|---|
+| dev | `observability-hub` (compartilhado) | `backend-dev`, `frontend-dev` | qualquer push em qualquer branch (exceto `main`) |
+| prod | `observability-hub` (compartilhado) | `backend-prod`, `frontend-prod` | merge/push em `main` |
 
-Nunca compartilhar recursos entre `dev` e `prod`. Cada ambiente tem seu próprio state do Terraform, service accounts, secrets e imagens no Artifact Registry.
+Dev e prod **compartilham o mesmo projeto GCP** — não há isolamento por
+fronteira de projeto. O isolamento entre os dois ambientes é garantido
+inteiramente por convenção de nomenclatura:
+
+- **Cloud Run**: nome do serviço sempre sufixado (`backend-dev`/
+  `backend-prod`, idem frontend) — a SA de runtime herda o sufixo
+  (`account_id = "${service_name}-run"`, ver `modules/cloud-run/main.tf`).
+- **Firestore**: named database por ambiente (`dev`/`prod`), nunca o
+  banco `(default)` implícito — ver `core/firestore.py`.
+- **Ambiente do backend**: nunca inferido do `project_id` (é o mesmo pros
+  dois) — vem de `OBSERVABILITY_HUB_ENVIRONMENT`, injetada pelo Terraform
+  (ver `core/config.py::settings.environment`, `core/secrets.py::_is_prod`).
+- **Secret Manager**: secrets com valor distinto por ambiente têm nome
+  sufixado (`GOOGLE_OAUTH_CLIENT_ID_DEV`/`_PROD`); secrets com o mesmo
+  valor nos dois ambientes (`JWT_SECRET`, `OAUTH_ALLOWLIST`) não precisam
+  de sufixo — é literalmente o mesmo secret do mesmo projeto.
+- **Terraform state**: mesmo bucket GCS, isolado só por `prefix`
+  (`environments/dev` vs `environments/prod`).
+- **Deploy (WIF)**: pool/provider únicos e compartilhados; a restrição
+  "prod só via `refs/heads/main`" vive no IAM binding da SA
+  `gh-deploy-prod`, não no provider — ver `infra/terraform/bootstrap/`.
+- **Artifact Registry**: um repositório `apps` só, compartilhado pelos
+  quatro serviços (backend/frontend × dev/prod).
+
+Nunca remova um sufixo de ambiente de um nome de recurso "pra simplificar" — sem ele, dev e prod colidem no mesmo projeto.
 
 ## Serviços GCP e seu papel
 
@@ -128,23 +152,23 @@ Regra geral: **domains/ (backend) e features/ (frontend) espelham exatamente os 
 
 - Diretórios por ambiente (`environments/dev`, `environments/prod`), **não** workspaces — cada ambiente é uma raiz de execução independente.
 - Módulos reutilizáveis em `modules/`; cada ambiente só declara `module "..." { source = "../../modules/..." }` + variáveis específicas do ambiente + backend.
-- `infra/terraform/bootstrap` é aplicado manualmente (fora do CI), uma única vez por ambiente, para criar o bucket GCS de state e o pool/provider de Workload Identity Federation — ele não pode depender de um backend remoto que ainda não existe.
-- Backend do state: GCS, um bucket (ou um prefixo por ambiente dentro do mesmo bucket) definido em `bootstrap`.
+- `infra/terraform/bootstrap` é aplicado manualmente (fora do CI), **uma única vez** (não por ambiente — dev e prod compartilham projeto), para criar o bucket GCS de state, o pool/provider de Workload Identity Federation e as duas SAs de deploy (`gh-deploy-dev`, `gh-deploy-prod`) — ele não pode depender de um backend remoto que ainda não existe.
+- Backend do state: GCS, um bucket único compartilhado, isolado por `prefix` (`environments/dev`/`environments/prod`) definido em `bootstrap`.
 - Nenhum valor sensível em `.tfvars` commitado — usar `*.tfvars.example` como referência e injetar valores reais via CI ou `.tfvars` local (gitignored).
-- Nomenclatura de recursos: prefixar com o nome do projeto e ambiente quando o recurso não isolar por projeto GCP sozinho (ex: `observability-hub-dev-<recurso>`).
+- Nomenclatura de recursos: **sempre** sufixar com o ambiente (`-dev`/`-prod`) todo recurso que não seja naturalmente único por natureza (Cloud Run, service accounts, Firestore database) — não há projeto GCP separando dev de prod pra fazer esse trabalho por conta própria.
 
 ## CI/CD e deploy
 
 Gatilhos (a implementar em `.github/workflows/` na Fase 1, mas já são a política oficial de deploy):
 
-- **Push em qualquer branch** (exceto `main`) → build + deploy automático no ambiente **dev** (`observability-hub-dev`).
+- **Push em qualquer branch** (exceto `main`) → build + deploy automático no ambiente **dev** (`observability-hub`, serviços `backend-dev`/`frontend-dev`).
 - **Merge/push em `main`** → build + deploy **de app** (`backend-deploy-prod.yml`, `frontend-deploy-prod.yml`) só roda depois de aprovação manual — os dois jobs usam `environment: production` (GitHub Environment com "required reviewers" configurado nas Settings do repo), então ficam em "Waiting" até alguém aprovar. `terraform-apply-prod.yml` continua automático (decisão consciente, 2026-08-18 — mudança de infra já passa por `terraform plan` revisado antes do merge; só o deploy de app, que sobe uma imagem nova sem revisão nenhuma no meio, ganhou o gate).
 
 Diretrizes para os workflows quando forem criados:
 
 - Autenticação no GCP exclusivamente via Workload Identity Federation — nenhuma service account key em segredo do GitHub.
 - Workflows separados por app e por ambiente (ex: `backend-deploy-dev.yml`, `backend-deploy-prod.yml`, `frontend-deploy-dev.yml`, `frontend-deploy-prod.yml`, `terraform-plan.yml`, `terraform-apply-dev.yml`, `terraform-apply-prod.yml`), todos vivendo em `.github/workflows/`.
-- `terraform plan` roda em todo PR que toca `infra/terraform/**` — mas só para **dev**. O WIF de prod (`infra/terraform/bootstrap/prod`) tem `attribute_condition` restrito a `assertion.ref == "refs/heads/main"`, então nunca autentica em `pull_request` (roda em `refs/pull/N/merge`); revisar `terraform plan` de prod localmente antes de merges que tocam infra é responsabilidade manual até essa restrição ser revisitada. `apply` só roda após merge, no ambiente correspondente.
+- `terraform plan` roda em todo PR que toca `infra/terraform/**` — mas só para **dev**. A SA `gh-deploy-prod` só pode ser impersonada por um workflow rodando na branch `main` (restrição no IAM binding da SA, não no provider WIF — ele é único e compartilhado com dev, ver `infra/terraform/bootstrap/`), então nunca autentica em `pull_request` (roda em `refs/pull/N/merge`); revisar `terraform plan` de prod localmente antes de merges que tocam infra é responsabilidade manual até essa restrição ser revisitada. `apply` só roda após merge, no ambiente correspondente.
 - Deploy em prod não deve exigir Terraform workspace switch nem lógica condicional complexa — o ambiente é determinado pelo diretório (`environments/dev` vs `environments/prod`), não por uma flag em runtime.
 - Imagem Docker é buildada uma vez e promovida (mesma tag/digest) de dev para prod quando possível, evitando rebuild entre ambientes — a validar na Fase 1 conforme a estratégia de branch adotada.
 
@@ -158,7 +182,7 @@ Diretrizes para os workflows quando forem criados:
 ## Guardrails
 
 - Nunca commitar segredos, chaves de service account ou arquivos `.env` reais (ver `.gitignore`).
-- Nunca misturar recursos/dados de `dev` e `prod`.
+- Nunca misturar recursos/dados de `dev` e `prod` — dev e prod estão no mesmo projeto GCP, então esse isolamento depende inteiramente de nomes de recurso sufixados por ambiente (Cloud Run, SA de runtime, Firestore database) estarem sempre corretos. Nunca remover um sufixo de ambiente "pra simplificar".
 - Nunca usar Terraform workspaces — a separação de ambiente é sempre por diretório.
 - Nunca colocar lógica de negócio em `api/` (backend) ou chamadas HTTP direto em componentes de página (frontend).
 - Fase 0 (estrutura e documentação) e Fase 1 (bootstrap do Terraform, módulo `infra/terraform/modules/cloud-run/`, root modules de `environments/{dev,prod}`, workflows em `.github/workflows/` e backend skeleton com `GET /health` em `apps/backend/`) concluídas — dev e prod com Cloud Run, Artifact Registry e CI/CD funcionando de ponta a ponta. Ainda não existem: os demais módulos de `infra/terraform/modules/` (artifact-registry standalone já é interno ao módulo cloud-run; faltam bigquery, secret-manager, logging-sink), lógica de domínio em `apps/backend/src/observability_hub/domains/`, e nenhum código em `apps/frontend/`.
@@ -174,9 +198,9 @@ leitura do Hub — vira a base do documento de implementação entregue a um
 cliente real no futuro.
 
 **Toda vez que uma sessão liberar, alterar ou descobrir algum dos itens
-abaixo — em qualquer projeto GCP, incluindo os próprios
-`observability-hub-dev`/`observability-hub-prod` servindo de projeto-alvo
-um do outro —, isso entra na tabela "Registro de acessos concedidos" de
+abaixo — em qualquer projeto GCP, incluindo o próprio `observability-hub`
+(o único projeto onde dev e prod rodam) servindo de projeto-alvo do
+próprio Hub —, isso entra na tabela "Registro de acessos concedidos" de
 `docs/onboarding-cliente.md` antes de considerar a tarefa concluída:**
 - `gcloud services enable` de qualquer API num projeto alvo
 - `gcloud projects add-iam-policy-binding` (ou remoção) de qualquer role

@@ -18,3 +18,10 @@ Cada ambiente é uma raiz de execução Terraform independente: `infra/terraform
 - O ambiente-alvo é determinado pelo diretório de execução, não por uma flag de runtime ou workspace selecionado — reduz erro humano e simplifica a lógica dos workflows de CI/CD.
 - Alinhado à recomendação da HashiCorp de evitar workspaces para ambientes com requisitos de isolamento crítico.
 - Custo: alguma duplicação de declaração entre `environments/dev` e `environments/prod` (mitigada por módulos compartilhados em `modules/`).
+
+> **Nota (2026-08-18):** a premissa de contexto acima — "dois ambientes
+> GCP totalmente separados" — não vale mais neste repositório; dev e
+> prod passaram a compartilhar um único projeto GCP (restrição da
+> empresa cliente). A decisão em si (diretórios por ambiente, sem
+> workspaces) permanece válida e inalterada — ver
+> [ADR-010](ADR-010-single-project-topology.md) para o que mudou e por quê.

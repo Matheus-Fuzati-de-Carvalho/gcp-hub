@@ -12,12 +12,15 @@ from google.cloud import secretmanager
 from observability_hub.core.bigquery import get_runtime_project
 from observability_hub.core.config import settings
 
-# GOOGLE_OAUTH_CLIENT_ID/SECRET têm um secret por ambiente (_DEV/_PROD) —
-# são OAuth clients distintos no Google Cloud Console, um por conjunto de
-# URLs de callback registradas. JWT_SECRET e OAUTH_ALLOWLIST usam o mesmo
-# nome (e valor) nos dois ambientes — como dev e prod estão no mesmo
-# projeto (topologia single-project deste repositório), é literalmente o
-# mesmo secret do Secret Manager, não uma cópia por projeto.
+# GOOGLE_OAUTH_CLIENT_ID/SECRET e JWT_SECRET têm um secret por ambiente
+# (_DEV/_PROD) — dev e prod estão no mesmo projeto (topologia
+# single-project deste repositório), então sem o sufixo seria literalmente
+# o mesmo secret do Secret Manager pros dois ambientes. Pra OAuth isso já
+# seria quebrado por natureza (client IDs distintos, URLs de callback
+# diferentes); pra JWT_SECRET seria uma falha de isolamento sutil e grave —
+# um token de sessão assinado por dev seria válido em prod e vice-versa.
+# OAUTH_ALLOWLIST é o único que continua com nome (e valor) compartilhado
+# de propósito: controla só quem pode logar, não isolamento de sessão.
 
 
 @lru_cache
@@ -51,7 +54,7 @@ def get_oauth_client_secret() -> str:
 
 
 def get_jwt_secret() -> str:
-    return get_secret("JWT_SECRET")
+    return get_secret("JWT_SECRET_PROD" if _is_prod() else "JWT_SECRET_DEV")
 
 
 def get_oauth_allowlist() -> dict:
