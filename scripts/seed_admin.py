@@ -15,10 +15,12 @@ localmente, fora do Hub, e não duplica lógica do backend de propósito
 Uso (a partir de apps/backend, pra usar o venv/uv.lock já resolvido):
     cd apps/backend
     uv run python ../../scripts/seed_admin.py \\
-        --project observability-hub-dev --email primeiro-admin@dp6.com.br
+        --project observability-hub --environment dev \\
+        --email primeiro-admin@dp6.com.br
 
 Roda primeiro em dev, valida o fluxo ponta a ponta (login -> /admin
-abre -> consegue gerenciar outros usuários), só depois em prod.
+abre -> consegue gerenciar outros usuários), só depois em prod (mesmo
+--project, --environment prod).
 """
 
 import argparse
@@ -34,13 +36,19 @@ def main() -> None:
     parser.add_argument(
         "--project",
         required=True,
-        help="Projeto GCP onde o Hub roda (observability-hub-dev ou -prod)",
+        help="Projeto GCP onde o Hub roda — o mesmo projeto serve dev e prod (topologia single-project, ver ADR-010).",
+    )
+    parser.add_argument(
+        "--environment",
+        required=True,
+        choices=["dev", "prod"],
+        help="Ambiente a seedar — dev e prod são bancos Firestore nomeados distintos no mesmo projeto (ver core/firestore.py), então este parâmetro é obrigatório, não cosmético.",
     )
     parser.add_argument("--email", required=True, help="E-mail do primeiro administrador")
     args = parser.parse_args()
 
     email = args.email.strip().lower()
-    client = firestore.Client(project=args.project)
+    client = firestore.Client(project=args.project, database=args.environment)
     now = datetime.now(UTC)
 
     doc_ref = client.collection("hub_users").document(email)
@@ -55,7 +63,10 @@ def main() -> None:
     }
     doc_ref.set(data)
 
-    print(f"OK — {email} agora é administrador do Hub em {args.project} (hub_users/{email}).")
+    print(
+        f"OK — {email} agora é administrador do Hub em {args.project} "
+        f"(database={args.environment}, hub_users/{email})."
+    )
 
 
 if __name__ == "__main__":
