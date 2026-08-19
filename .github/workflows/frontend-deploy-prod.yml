@@ -101,7 +101,7 @@ jobs:
       - name: Get backend URL
         id: backend
         run: |
-          url=$(gcloud run services describe backend \
+          url=$(gcloud run services describe backend-prod \
             --project "${PROJECT_ID}" \
             --region "${REGION}" \
             --format='value(status.url)')
