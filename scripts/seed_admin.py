@@ -51,7 +51,8 @@ def main() -> None:
     # "hub-" + ambiente, não o ambiente puro — database_id do Firestore
     # exige 4+ caracteres ("dev" sozinho é rejeitado), mesmo prefixo usado
     # em core/firestore.py e no Terraform (google_firestore_database).
-    client = firestore.Client(project=args.project, database=f"hub-{args.environment}")
+    database = f"hub-{args.environment}"
+    client = firestore.Client(project=args.project, database=database)
     now = datetime.now(UTC)
 
     doc_ref = client.collection("hub_users").document(email)
@@ -68,7 +69,7 @@ def main() -> None:
 
     print(
         f"OK — {email} agora é administrador do Hub em {args.project} "
-        f"(database={args.environment}, hub_users/{email})."
+        f"(database={database}, hub_users/{email})."
     )
 
 

@@ -72,30 +72,34 @@ gcloud services enable storage.googleapis.com --project={SEU_PROJETO}
 CONTA_DE_SERVICO="{conta-de-servico}@{projeto-do-hub}.iam.gserviceaccount.com"
 
 gcloud projects add-iam-policy-binding {SEU_PROJETO} \
-  --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/bigquery.metadataViewer"
+  --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/bigquery.metadataViewer" --condition=None
 
 gcloud projects add-iam-policy-binding {SEU_PROJETO} \
-  --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/bigquery.jobUser"
+  --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/bigquery.jobUser" --condition=None
 
 gcloud projects add-iam-policy-binding {SEU_PROJETO} \
-  --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/bigquery.dataViewer"
+  --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/bigquery.dataViewer" --condition=None
 
 gcloud projects add-iam-policy-binding {SEU_PROJETO} \
-  --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/logging.viewer"
+  --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/logging.viewer" --condition=None
 
 gcloud projects add-iam-policy-binding {SEU_PROJETO} \
-  --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/logging.privateLogViewer"
+  --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/logging.privateLogViewer" --condition=None
 ```
 
 Só se for usar a análise de Cloud Storage (Passo 2):
 
 ```bash
 gcloud projects add-iam-policy-binding {SEU_PROJETO} \
-  --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/storage.bucketViewer"
+  --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/storage.bucketViewer" --condition=None
 
 gcloud projects add-iam-policy-binding {SEU_PROJETO} \
-  --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/storage.objectViewer"
+  --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/storage.objectViewer" --condition=None
 ```
+
+`--condition=None` evita um prompt interativo do `gcloud` perguntando se
+você quer adicionar uma IAM Condition — sem ele, copiar/colar os comandos
+de uma vez só pode travar esperando resposta.
 
 | Permissão | Para que serve |
 |---|---|

@@ -288,12 +288,17 @@ for ENV in dev prod; do
   SA_EMAIL="backend-${ENV}-run@{PROJETO}.iam.gserviceaccount.com"
 
   gcloud projects add-iam-policy-binding {PROJETO} \
-    --member="serviceAccount:${SA_EMAIL}" --role="roles/datastore.user"
+    --member="serviceAccount:${SA_EMAIL}" --role="roles/datastore.user" --condition=None
 
   gcloud projects add-iam-policy-binding {PROJETO} \
-    --member="serviceAccount:${SA_EMAIL}" --role="roles/secretmanager.secretAccessor"
+    --member="serviceAccount:${SA_EMAIL}" --role="roles/secretmanager.secretAccessor" --condition=None
 done
 ```
+
+`--condition=None` evita um prompt interativo do `gcloud` perguntando se
+você quer adicionar uma IAM Condition — sem ele, um script não
+interativo (CI, ou copiar/colar tudo de uma vez) pode travar esperando
+resposta.
 
 `roles/datastore.user` é concedido a nível de projeto, não por banco —
 tecnicamente `backend-dev-run` também consegue acessar o database

@@ -238,10 +238,10 @@ for AMBIENTE in dev prod; do
   CONTA_DE_SERVICO="backend-${AMBIENTE}-run@{PROJETO}.iam.gserviceaccount.com"
 
   gcloud projects add-iam-policy-binding {PROJETO} \
-    --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/datastore.user"
+    --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/datastore.user" --condition=None
 
   gcloud projects add-iam-policy-binding {PROJETO} \
-    --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/secretmanager.secretAccessor"
+    --member="serviceAccount:${CONTA_DE_SERVICO}" --role="roles/secretmanager.secretAccessor" --condition=None
 done
 ```
 

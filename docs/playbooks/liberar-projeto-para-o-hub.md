@@ -73,27 +73,30 @@ lineage que usa bucket como nó) — pule se não for o caso.
 SA_EMAIL="backend-prod-run@observability-hub.iam.gserviceaccount.com"  # ou backend-dev-run@...
 
 gcloud projects add-iam-policy-binding {PROJECT_ID} \
-  --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.metadataViewer"
+  --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.metadataViewer" --condition=None
 
 gcloud projects add-iam-policy-binding {PROJECT_ID} \
-  --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.jobUser"
+  --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.jobUser" --condition=None
 
 gcloud projects add-iam-policy-binding {PROJECT_ID} \
-  --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.dataViewer"
+  --member="serviceAccount:${SA_EMAIL}" --role="roles/bigquery.dataViewer" --condition=None
 
 gcloud projects add-iam-policy-binding {PROJECT_ID} \
-  --member="serviceAccount:${SA_EMAIL}" --role="roles/logging.viewer"
+  --member="serviceAccount:${SA_EMAIL}" --role="roles/logging.viewer" --condition=None
 
 gcloud projects add-iam-policy-binding {PROJECT_ID} \
-  --member="serviceAccount:${SA_EMAIL}" --role="roles/logging.privateLogViewer"
+  --member="serviceAccount:${SA_EMAIL}" --role="roles/logging.privateLogViewer" --condition=None
 
 # As duas de baixo só se o cliente for usar o domínio storage (seção 3 acima)
 gcloud projects add-iam-policy-binding {PROJECT_ID} \
-  --member="serviceAccount:${SA_EMAIL}" --role="roles/storage.bucketViewer"
+  --member="serviceAccount:${SA_EMAIL}" --role="roles/storage.bucketViewer" --condition=None
 
 gcloud projects add-iam-policy-binding {PROJECT_ID} \
-  --member="serviceAccount:${SA_EMAIL}" --role="roles/storage.objectViewer"
+  --member="serviceAccount:${SA_EMAIL}" --role="roles/storage.objectViewer" --condition=None
 ```
+
+`--condition=None` evita um prompt interativo do `gcloud` perguntando se
+você quer adicionar uma IAM Condition.
 
 Todos idempotentes — seguro rodar de novo. Resumo do que cada uma libera:
 
