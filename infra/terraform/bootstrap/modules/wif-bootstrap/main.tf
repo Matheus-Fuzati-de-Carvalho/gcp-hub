@@ -130,14 +130,21 @@ resource "google_service_account_iam_member" "wif_binding" {
   role               = "roles/iam.workloadIdentityUser"
   # Sem restrict_to_ref (dev, hoje): qualquer branch do repositório pode
   # impersonar — espelha "push em qualquer branch -> deploy em dev"
-  # (CLAUDE.md). Com restrict_to_ref (prod): só o subject exato daquele
-  # ref pode impersonar — GitHub emite google.subject (= assertion.sub) no
-  # formato "repo:{org}/{repo}:ref:{ref}" pra um push, então o principal
-  # abaixo restringe a exatamente esse subject.
+  # (CLAUDE.md). Com restrict_to_ref (prod): usa o atributo customizado
+  # attribute.ref (já mapeado acima em attribute_mapping) em vez de montar
+  # o "subject" exato manualmente — a primeira tentativa
+  # (principal://.../subject/repo:{org}/{repo}:ref:{ref}) falhou em
+  # produção com "iam.serviceAccounts.getAccessToken denied" mesmo com a
+  # sintaxe aparentemente correta; principalSet sobre attribute.ref é o
+  # padrão que a documentação do Google/GitHub recomenda pra restringir
+  # por branch, e evita depender do formato exato do claim `sub`. O
+  # attribute_condition do provider já garante que só este repositório
+  # passa pela troca de token (STS) — o binding abaixo só precisa
+  # verificar o ref, não o repositório de novo.
   member = each.value.restrict_to_ref == null ? (
     "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_pool.name}/attribute.repository/${var.github_repository}"
     ) : (
-    "principal://iam.googleapis.com/${google_iam_workload_identity_pool.github_pool.name}/subject/repo:${var.github_repository}:ref:${each.value.restrict_to_ref}"
+    "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_pool.name}/attribute.ref/${urlencode(each.value.restrict_to_ref)}"
   )
 }
 
