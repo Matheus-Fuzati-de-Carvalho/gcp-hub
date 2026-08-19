@@ -48,7 +48,10 @@ def main() -> None:
     args = parser.parse_args()
 
     email = args.email.strip().lower()
-    client = firestore.Client(project=args.project, database=args.environment)
+    # "hub-" + ambiente, não o ambiente puro — database_id do Firestore
+    # exige 4+ caracteres ("dev" sozinho é rejeitado), mesmo prefixo usado
+    # em core/firestore.py e no Terraform (google_firestore_database).
+    client = firestore.Client(project=args.project, database=f"hub-{args.environment}")
     now = datetime.now(UTC)
 
     doc_ref = client.collection("hub_users").document(email)

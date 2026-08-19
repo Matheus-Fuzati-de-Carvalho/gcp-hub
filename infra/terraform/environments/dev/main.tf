@@ -52,10 +52,12 @@ module "frontend_cloud_run" {
 # Firestore named database do ambiente dev — dev e prod estão no mesmo
 # projeto GCP, então não dá pra usar o banco "(default)" implícito pros
 # dois (misturaria dados). Precisa existir antes do primeiro deploy do
-# backend (core/firestore.py::get_firestore_client usa database="dev").
+# backend (core/firestore.py::get_firestore_client usa database="hub-dev").
+# Nome prefixado com "hub-" porque database_id do Firestore exige no
+# mínimo 4 caracteres — "dev" sozinho (3) é rejeitado pela API.
 resource "google_firestore_database" "hub" {
   project     = var.project_id
-  name        = "dev"
+  name        = "hub-dev"
   location_id = var.region
   type        = "FIRESTORE_NATIVE"
 
