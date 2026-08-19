@@ -49,14 +49,21 @@ inteiramente por convenção de nomenclatura:
   dois) — vem de `OBSERVABILITY_HUB_ENVIRONMENT`, injetada pelo Terraform
   (ver `core/config.py::settings.environment`, `core/secrets.py::_is_prod`).
 - **Secret Manager**: secrets com valor distinto por ambiente têm nome
-  sufixado (`GOOGLE_OAUTH_CLIENT_ID_DEV`/`_PROD`); secrets com o mesmo
-  valor nos dois ambientes (`JWT_SECRET`, `OAUTH_ALLOWLIST`) não precisam
-  de sufixo — é literalmente o mesmo secret do mesmo projeto.
+  sufixado (`GOOGLE_OAUTH_CLIENT_ID_DEV`/`_PROD`, `JWT_SECRET_DEV`/`_PROD`
+  — este último crítico: sem sufixo, um token de sessão de dev validaria
+  em prod); só `OAUTH_ALLOWLIST` é intencionalmente compartilhado sem
+  sufixo (controla apenas quem loga, não isolamento de sessão).
 - **Terraform state**: mesmo bucket GCS, isolado só por `prefix`
   (`environments/dev` vs `environments/prod`).
-- **Deploy (WIF)**: pool/provider únicos e compartilhados; a restrição
-  "prod só via `refs/heads/main`" vive no IAM binding da SA
-  `gh-deploy-prod`, não no provider — ver `infra/terraform/bootstrap/`.
+- **Deploy (WIF)**: um pool compartilhado, mas **um provider por
+  ambiente** (`github-provider-dev`/`github-provider-prod`) — a
+  restrição "prod só via `refs/heads/main`" vive no
+  `attribute_condition` do provider de prod, igual ao padrão do
+  repositório de origem. Tentativas de usar um provider único
+  compartilhado + restrição no binding da SA (subject exato, atributo
+  customizado, IAM Condition) falharam todas em produção — ver
+  `infra/terraform/bootstrap/modules/wif-bootstrap/main.tf` e
+  [ADR-010](docs/adr/ADR-010-single-project-topology.md).
 - **Artifact Registry**: um repositório `apps` só, compartilhado pelos
   quatro serviços (backend/frontend × dev/prod).
 

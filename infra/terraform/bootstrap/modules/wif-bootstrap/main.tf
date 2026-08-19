@@ -76,12 +76,20 @@ resource "google_storage_bucket" "tfstate" {
   depends_on = [google_project_service.apis]
 }
 
-# Pool e provider únicos — um só de cada, compartilhado pelas identidades
-# de deploy de dev e prod (topologia single-project: não há um projeto por
-# ambiente pra justificar um pool por ambiente). A restrição "prod só via
-# refs/heads/main" NÃO fica aqui (um provider só não pode ter dois
-# attribute_condition diferentes) — fica no IAM binding de cada SA de
-# deploy, abaixo.
+# Um pool só, compartilhado pelas identidades de deploy de dev e prod
+# (topologia single-project: não há um projeto por ambiente pra justificar
+# um pool por ambiente) — mas UM PROVIDER POR AMBIENTE dentro dele, não um
+# só. Tentativas de restringir "prod só via refs/heads/main" num provider
+# único compartilhado (via um principal/binding de SA mais específico —
+# subject exato montado à mão, depois attribute.ref, depois attribute.ref
+# como IAM Condition) falharam todas em produção, confirmado via
+# terraform-apply-prod.yml real no piloto gcp-hub-dp6: as duas primeiras
+# com "iam.serviceAccounts.getAccessToken denied" mesmo depois de vários
+# minutos (não era propagação); a terceira nem compilava (IAM Conditions
+# avaliam atributos do RECURSO, não do principal federado — "undeclared
+# reference to 'attribute'"). Só o padrão já comprovado no repositório de
+# origem funcionou de primeira: attribute_condition por PROVIDER. Um pool,
+# dois providers, resolve sem depender de nenhum mecanismo novo.
 resource "google_iam_workload_identity_pool" "github_pool" {
   project                   = var.project_id
   workload_identity_pool_id = "github-actions-pool"
@@ -92,10 +100,12 @@ resource "google_iam_workload_identity_pool" "github_pool" {
 }
 
 resource "google_iam_workload_identity_pool_provider" "github_provider" {
+  for_each = var.deploy_identities
+
   project                            = var.project_id
   workload_identity_pool_id          = google_iam_workload_identity_pool.github_pool.workload_identity_pool_id
-  workload_identity_pool_provider_id = "github-provider"
-  display_name                       = "GitHub OIDC"
+  workload_identity_pool_provider_id = "github-provider-${each.key}"
+  display_name                       = "GitHub OIDC (${each.key})"
 
   attribute_mapping = {
     "google.subject"       = "assertion.sub"
@@ -104,10 +114,15 @@ resource "google_iam_workload_identity_pool_provider" "github_provider" {
   }
 
   # Obrigatório: sem attribute_condition, qualquer repositório do GitHub
-  # (de qualquer conta) poderia tentar se passar por este pool. Só filtra
-  # pelo repositório — a restrição de ref (dev: qualquer branch; prod: só
-  # main) é decidida por SA no binding abaixo, não aqui.
-  attribute_condition = "assertion.repository == \"${var.github_repository}\""
+  # (de qualquer conta) poderia tentar se passar por este pool. Sempre
+  # filtra pelo repositório; quando restrict_to_ref é definido (prod),
+  # filtra também pelo ref exato — aqui, não no binding da SA, porque é o
+  # único mecanismo que comprovadamente funciona neste projeto.
+  attribute_condition = each.value.restrict_to_ref == null ? (
+    "assertion.repository == \"${var.github_repository}\""
+    ) : (
+    "assertion.repository == \"${var.github_repository}\" && assertion.ref == \"${each.value.restrict_to_ref}\""
+  )
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
@@ -128,24 +143,13 @@ resource "google_service_account_iam_member" "wif_binding" {
 
   service_account_id = google_service_account.deployer[each.key].name
   role               = "roles/iam.workloadIdentityUser"
-  # Sem restrict_to_ref (dev, hoje): qualquer branch do repositório pode
-  # impersonar — espelha "push em qualquer branch -> deploy em dev"
-  # (CLAUDE.md). Com restrict_to_ref (prod): usa o atributo customizado
-  # attribute.ref (já mapeado acima em attribute_mapping) em vez de montar
-  # o "subject" exato manualmente — a primeira tentativa
-  # (principal://.../subject/repo:{org}/{repo}:ref:{ref}) falhou em
-  # produção com "iam.serviceAccounts.getAccessToken denied" mesmo com a
-  # sintaxe aparentemente correta; principalSet sobre attribute.ref é o
-  # padrão que a documentação do Google/GitHub recomenda pra restringir
-  # por branch, e evita depender do formato exato do claim `sub`. O
-  # attribute_condition do provider já garante que só este repositório
-  # passa pela troca de token (STS) — o binding abaixo só precisa
-  # verificar o ref, não o repositório de novo.
-  member = each.value.restrict_to_ref == null ? (
-    "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_pool.name}/attribute.repository/${var.github_repository}"
-    ) : (
-    "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_pool.name}/attribute.ref/${urlencode(each.value.restrict_to_ref)}"
-  )
+  # Sempre o mesmo formato de member (attribute.repository, escopado ao
+  # POOL — não muda por provider) pras duas identidades. A restrição de
+  # ref já aconteceu antes disso, no provider correspondente (ver
+  # attribute_condition acima) — cada environment usa um provider
+  # diferente (workload_identity_provider nos workflows), então só um
+  # token que já passou pela checagem de ref certa chega a esta troca.
+  member = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_pool.name}/attribute.repository/${var.github_repository}"
 }
 
 resource "google_project_iam_member" "deployer_roles" {

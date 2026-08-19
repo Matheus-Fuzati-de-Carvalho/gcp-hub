@@ -3,9 +3,9 @@ output "state_bucket_name" {
   value       = google_storage_bucket.tfstate.name
 }
 
-output "workload_identity_provider" {
-  description = "Nome completo do provider, usado em google-github-actions/auth (input workload_identity_provider) — o mesmo valor pros workflows de dev e de prod."
-  value       = google_iam_workload_identity_pool_provider.github_provider.name
+output "workload_identity_providers" {
+  description = "Mapa ambiente -> nome completo do provider, usado em google-github-actions/auth (input workload_identity_provider) — um provider por ambiente, valores diferentes (ver comentário em main.tf sobre por que não é um provider único compartilhado)."
+  value       = { for env, provider in google_iam_workload_identity_pool_provider.github_provider : env => provider.name }
 }
 
 output "service_account_emails" {

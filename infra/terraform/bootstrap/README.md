@@ -4,10 +4,10 @@ Cria a fundação que o resto do Terraform (`infra/terraform/environments/`) e o
 
 - Bucket GCS de remote state, único, compartilhado (`<project_id>-tfstate`) — dev e prod se isolam dentro dele via `prefix` (`environments/dev` / `environments/prod`)
 - APIs do GCP necessárias habilitadas no projeto
-- Um Workload Identity Pool + Provider OIDC confiando no GitHub Actions, compartilhado pelos dois ambientes
+- Um Workload Identity Pool compartilhado, com **um Provider OIDC por ambiente** (`github-provider-dev`, `github-provider-prod`) — não dá pra ter uma restrição de ref no binding da SA de deploy compartilhando um provider só (ver nota abaixo e ADR-010, seção "Notas do piloto", pra três tentativas que pareciam funcionar e não funcionaram)
 - Duas service accounts de deploy, restritas ao repositório configurado em `github_repository`:
-  - `gh-deploy-dev`: qualquer branch pode assumir a identidade
-  - `gh-deploy-prod`: só a branch `main` pode assumir a identidade (restrição aplicada no IAM binding da SA, não no provider — um provider só não comporta duas condições de ref diferentes)
+  - `gh-deploy-dev`: qualquer branch pode assumir a identidade (provider `github-provider-dev`, `attribute_condition` só verifica o repositório)
+  - `gh-deploy-prod`: só a branch `main` pode assumir a identidade (provider `github-provider-prod`, `attribute_condition` verifica repositório **e** `assertion.ref == "refs/heads/main"`)
 
 Aplicado **manualmente, fora do CI**, uma única vez — é o único ponto do projeto com state local (não há ainda um bucket remoto para guardar o próprio state do bootstrap).
 
@@ -29,13 +29,13 @@ terraform apply
 
 ```bash
 terraform output state_bucket_name
-terraform output workload_identity_provider
-terraform output service_account_emails
+terraform output -json workload_identity_providers
+terraform output -json service_account_emails
 ```
 
 - `state_bucket_name` → vai no bloco `backend "gcs"` de **cada** `infra/terraform/environments/<env>` (mesmo bucket, `prefix` diferente).
-- `workload_identity_provider` → vai no input `workload_identity_provider` da action `google-github-actions/auth`, igual nos workflows de dev e de prod.
-- `service_account_emails` → um mapa `{ dev = "...", prod = "..." }`; cada workflow usa a entrada correspondente ao seu ambiente no input `service_account` de `google-github-actions/auth`.
+- `workload_identity_providers` → um mapa `{ dev = "...", prod = "..." }`, **valores diferentes** — cada workflow usa a entrada correspondente ao seu ambiente no input `workload_identity_provider` de `google-github-actions/auth` (secrets `WIF_PROVIDER_DEV`/`WIF_PROVIDER_PROD` do GitHub).
+- `service_account_emails` → mesmo formato de mapa; cada workflow usa a entrada correspondente ao seu ambiente no input `service_account` de `google-github-actions/auth`.
 
 ## Importante
 

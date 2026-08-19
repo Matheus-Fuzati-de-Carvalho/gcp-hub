@@ -164,12 +164,12 @@ Ao final, capture os resultados (serão usados na próxima etapa):
 
 ```bash
 terraform output state_bucket_name
-terraform output workload_identity_provider
+terraform output -json workload_identity_providers
 terraform output -json service_account_emails
 ```
 
-O último resultado traz as duas identidades (teste e produção) num
-único mapa.
+Os dois últimos resultados trazem as duas identidades (teste e
+produção) num único mapa cada.
 
 ---
 
@@ -177,13 +177,12 @@ O último resultado traz as duas identidades (teste e produção) num
 
 No repositório GitHub, em Configurações → Secrets and variables →
 Actions, cadastre quatro segredos com os valores obtidos na etapa
-anterior. Os dois "provider" recebem o **mesmo valor** — é uma
-identidade de confiança única, compartilhada entre teste e produção;
-só a identidade que a usa muda:
+anterior — cada um com o valor da entrada correspondente ('dev' ou
+'prod') do mapa:
 
 ```bash
-gh secret set WIF_PROVIDER_DEV --body "<valor de workload_identity_provider>"
-gh secret set WIF_PROVIDER_PROD --body "<mesmo valor de workload_identity_provider>"
+gh secret set WIF_PROVIDER_DEV --body "<entrada 'dev' de workload_identity_providers>"
+gh secret set WIF_PROVIDER_PROD --body "<entrada 'prod' de workload_identity_providers>"
 gh secret set WIF_SA_DEV --body "<entrada 'dev' de service_account_emails>"
 gh secret set WIF_SA_PROD --body "<entrada 'prod' de service_account_emails>"
 ```
@@ -382,8 +381,8 @@ Com isso, o ambiente de teste está validado e pronto para uso.
 [ ] Arquivos de configuração ajustados e publicados no repositório
     (mesmo nome de projeto em todos)
 [ ] Base de implantação preparada — uma única vez (Etapa 4)
-[ ] Segredos do GitHub configurados (os dois "provider" com o mesmo
-    valor, as duas identidades com valores diferentes)
+[ ] Segredos do GitHub configurados (os quatro com valores diferentes
+    entre teste e produção)
 [ ] Aprovação obrigatória de produção configurada (Etapa 5)
 [ ] Primeira implantação de teste confirmada com sucesso — cria as
     aplicações de teste, o banco de teste e o repositório de imagens

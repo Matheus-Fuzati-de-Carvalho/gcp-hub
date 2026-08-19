@@ -33,13 +33,18 @@ sobre onde o Hub *em si* roda.
 - 1 repositório Artifact Registry (`apps`) compartilhado pelos quatro
 - 4 service accounts de runtime, uma por serviço (`backend-dev-run`,
   `frontend-dev-run`, `backend-prod-run`, `frontend-prod-run`)
-- Firestore (Native mode), **dois named databases** (`dev` e `prod`) —
-  dado próprio do Hub: ACL de usuário×projeto, favoritos, histórico,
-  login events. Nunca o banco `(default)` implícito, que seria
-  compartilhado entre os dois ambientes.
+- Firestore (Native mode), **dois named databases** (`hub-dev` e
+  `hub-prod` — prefixo `hub-` porque `database_id` exige 4+ caracteres,
+  "dev" sozinho é rejeitado pela API) — dado próprio do Hub: ACL de
+  usuário×projeto, favoritos, histórico, login events. Nunca o banco
+  `(default)` implícito, que seria compartilhado entre os dois
+  ambientes.
 - Secret Manager — credenciais OAuth, JWT, allowlist de login
-- Workload Identity Federation — **um pool/provider único**, compartilhado
-  por duas service accounts de deploy (`gh-deploy-dev`, `gh-deploy-prod`)
+- Workload Identity Federation — **um pool compartilhado, mas um
+  provider por ambiente** (`github-provider-dev`, `github-provider-prod`
+  — ver ADR-010 pra por que um provider único não funcionou na prática),
+  usados por duas service accounts de deploy (`gh-deploy-dev`,
+  `gh-deploy-prod`)
 - 1 bucket GCS de remote state do Terraform, isolado por `prefix`
   (`environments/dev`/`environments/prod`)
 
@@ -106,8 +111,8 @@ gcloud billing projects link {NOVO_PROJETO} --billing-account={BILLING_ACCOUNT_I
 ## 5. Habilitar e provisionar o Firestore (passo manual — não é Terraform hoje)
 
 O Firestore em si (a habilitação da API) é provisionado manualmente,
-mas os **dois named databases** (`dev` e `prod`) já são criados pelo
-Terraform via `google_firestore_database` em cada
+mas os **dois named databases** (`hub-dev` e `hub-prod`) já são criados
+pelo Terraform via `google_firestore_database` em cada
 `environments/{dev,prod}/main.tf` — não precisa criá-los aqui, só
 habilitar a API antes do primeiro `terraform apply` (passo 9):
 
@@ -121,7 +126,7 @@ pra testar algo isolado), o comando equivalente é:
 ```bash
 gcloud firestore databases create \
   --project={PROJETO} \
-  --database={dev|prod} \
+  --database={hub-dev|hub-prod} \
   --location={REGIAO_FIRESTORE} \
   --type=firestore-native
 ```
@@ -175,10 +180,12 @@ terraform apply
 Isso cria, no projeto: bucket de state, as APIs base habilitadas
 (`iam`, `run`, `artifactregistry`, `bigquery`, `secretmanager`,
 `logging`, `firestore`, etc. — lista completa em
-`infra/terraform/bootstrap/modules/wif-bootstrap/main.tf`), um único
-pool/provider de Workload Identity Federation, e **duas** service
-accounts de deploy (`gh-deploy-dev`, `gh-deploy-prod`) — uma única
-execução, não uma por ambiente.
+`infra/terraform/bootstrap/modules/wif-bootstrap/main.tf`), um pool de
+Workload Identity Federation compartilhado com **um provider por
+ambiente** (`github-provider-dev`, `github-provider-prod` — ver
+ADR-010 pra por que um provider único compartilhado não funcionou), e
+**duas** service accounts de deploy (`gh-deploy-dev`, `gh-deploy-prod`)
+— uma única execução, não uma por ambiente.
 
 **Guarde o `terraform.tfstate` local deste diretório fora do Git**
 (não é versionado, é a única cópia) — o README já avisa, reforçando
@@ -188,13 +195,13 @@ Ao final, capture os três outputs:
 
 ```bash
 terraform output state_bucket_name
-terraform output workload_identity_provider
+terraform output -json workload_identity_providers
 terraform output -json service_account_emails
 ```
 
-`service_account_emails` é um mapa `{ "dev": "...", "prod": "..." }` —
-os dois deploys de app usam o mesmo `workload_identity_provider`, mas
-cada um usa a entrada correspondente do mapa.
+Os dois últimos são mapas `{ "dev": "...", "prod": "..." }` com
+**valores diferentes** entre dev e prod — cada deploy de app usa a
+entrada correspondente ao seu ambiente nos dois.
 
 ---
 
@@ -204,14 +211,13 @@ Quatro secrets no repositório (Settings → Secrets and variables →
 Actions), usando os outputs do passo 7:
 
 ```bash
-WIF_PROVIDER=$(terraform -chdir=infra/terraform/bootstrap output -raw workload_identity_provider)
+WIF_PROVIDER_DEV=$(terraform -chdir=infra/terraform/bootstrap output -json workload_identity_providers | jq -r .dev)
+WIF_PROVIDER_PROD=$(terraform -chdir=infra/terraform/bootstrap output -json workload_identity_providers | jq -r .prod)
 WIF_SA_DEV=$(terraform -chdir=infra/terraform/bootstrap output -json service_account_emails | jq -r .dev)
 WIF_SA_PROD=$(terraform -chdir=infra/terraform/bootstrap output -json service_account_emails | jq -r .prod)
 
-# WIF_PROVIDER_DEV e WIF_PROVIDER_PROD recebem o MESMO valor — é um único
-# pool/provider compartilhado (ver ADR-010); só a SA impersonada muda.
-gh secret set WIF_PROVIDER_DEV --body "$WIF_PROVIDER"
-gh secret set WIF_PROVIDER_PROD --body "$WIF_PROVIDER"
+gh secret set WIF_PROVIDER_DEV --body "$WIF_PROVIDER_DEV"
+gh secret set WIF_PROVIDER_PROD --body "$WIF_PROVIDER_PROD"
 gh secret set WIF_SA_DEV --body "$WIF_SA_DEV"
 gh secret set WIF_SA_PROD --body "$WIF_SA_PROD"
 ```
@@ -254,13 +260,13 @@ com sucesso (`gh run list --workflow=terraform-apply-dev.yml`) antes de
 seguir — ele cria `backend-dev`, `frontend-dev`, o repositório Artifact
 Registry `apps` (só a instância de dev o gerencia — ver
 `manage_artifact_registry` nos root modules), o Firestore database
-`dev` e as duas service accounts de runtime de dev.
+`hub-dev` e as duas service accounts de runtime de dev.
 
 Para prod, o mesmo `terraform apply` só roda em push/merge para `main` —
 deixe para depois de validar tudo em dev (passo 15). Ele reaproveita o
 mesmo repositório Artifact Registry (`manage_artifact_registry = false`
 nos dois módulos de prod) e cria só o que é exclusivo de prod: os dois
-serviços Cloud Run `-prod`, o Firestore database `prod`.
+serviços Cloud Run `-prod`, o Firestore database `hub-prod`.
 
 Alternativa manual (se preferir não depender do primeiro push para
 isso): `cd infra/terraform/environments/dev && terraform init && terraform apply`,
@@ -449,7 +455,7 @@ Depois de validar dev:
 
 1. Merge/push da branch com os arquivos do passo 6 para `main` — dispara
    `terraform-apply-prod.yml` (cria os serviços Cloud Run de prod e o
-   Firestore database `prod`, automático) e, em seguida,
+   Firestore database `hub-prod`, automático) e, em seguida,
    `backend-deploy-prod.yml`/`frontend-deploy-prod.yml`.
 2. **Os dois deploys de app ficam em "Waiting"** se o passo 8.1 foi
    configurado — abra a aba *Actions* do repositório, clique no run
@@ -484,15 +490,15 @@ dele mesmo), siga [`liberar-projeto-para-o-hub.md`](liberar-projeto-para-o-hub.m
     state x2, github_repository, PROJECT_ID dos 4 workflows — todos
     apontando pro mesmo projeto/bucket)
 [ ] Bootstrap Terraform aplicado manualmente, uma única vez — outputs
-    capturados (state_bucket_name, workload_identity_provider,
+    capturados (state_bucket_name, workload_identity_providers,
     service_account_emails)
-[ ] 4 secrets do GitHub Actions configurados (WIF_PROVIDER_DEV/PROD —
-    mesmo valor nos dois —, WIF_SA_DEV/PROD — valores diferentes)
+[ ] 4 secrets do GitHub Actions configurados (WIF_PROVIDER_DEV/PROD e
+    WIF_SA_DEV/PROD — os quatro com valores diferentes entre dev e prod)
 [ ] Environment "production" criado nas Settings do GitHub com
     required reviewers (passo 8.1) — sem isso os deploys de app em prod
     não têm gate nenhum
 [ ] Primeiro apply de environments/dev confirmado com sucesso (cria
-    backend-dev, frontend-dev, repo apps, Firestore database "dev")
+    backend-dev, frontend-dev, repo apps, Firestore database "hub-dev")
 [ ] roles/datastore.user + roles/secretmanager.secretAccessor
     concedidas às DUAS service accounts de backend (backend-dev-run,
     backend-prod-run)
@@ -505,7 +511,7 @@ dele mesmo), siga [`liberar-projeto-para-o-hub.md`](liberar-projeto-para-o-hub.m
 [ ] Primeiro admin criado via scripts/seed_admin.py --environment dev
 [ ] Login + /admin validados ponta a ponta em dev
 [ ] Passos 9–14 repetidos para prod (Terraform apply de prod cria
-    backend-prod, frontend-prod, Firestore database "prod")
+    backend-prod, frontend-prod, Firestore database "hub-prod")
 [ ] Deploys de app em prod aprovados manualmente (Review deployments),
     se o gate do passo 8.1 estiver configurado
 [ ] Primeiro admin criado via scripts/seed_admin.py --environment prod
@@ -527,6 +533,7 @@ na migração pra topologia single-project (ADR-010):
 | Drift entre o Cloud Run real e o state do Terraform | Consequência do item acima, se já tiver acontecido | Em ambiente sem tráfego real: `gcloud run services delete` seguido de `terraform apply`. Com tráfego real, preferir `terraform import` |
 | Provider `google` falha no primeiro `terraform apply` do bootstrap reclamando de Service Usage/Resource Manager API desabilitada | Em alguns projetos novíssimos essas duas não vêm habilitadas por padrão | `gcloud services enable serviceusage.googleapis.com cloudresourcemanager.googleapis.com --project={PROJETO}` antes do primeiro apply |
 | `terraform apply` de `environments/prod` falha tentando criar o repositório Artifact Registry `apps` (já existe) | `manage_artifact_registry` não está `false` nos dois módulos de prod (backend e frontend) — só a instância de dev deve gerenciar o repo compartilhado | Conferir `environments/prod/main.tf` — os dois `module` blocks precisam de `manage_artifact_registry = false` |
+| Deploy via GitHub Actions falha com `iam.serviceAccounts.getAccessToken denied` logo depois do bootstrap ter criado (ou recriado) um provider WIF novo | Provider recém-criado ainda não propagou — visto no piloto (`gcp-hub-dp6`), levou uns 2-3 minutos; diferente de editar o binding de uma SA já existente, que parece valer quase na hora | Esperar alguns minutos e rodar o workflow de novo (`gh run rerun <id>`) antes de investigar mais a fundo — ver ADR-010, "Notas do piloto" |
 | Backend sobe mas todo endpoint autenticado falha (`/auth/me`, favoritos, admin) | Passo 10 (roles `datastore.user`/`secretmanager.secretAccessor`) não foi feito pra aquela SA específica (dev e prod são SAs diferentes, precisam das duas concessões cada) | Conceder as duas roles à `backend-{env}-run@{projeto}` correspondente |
 | Login falha na troca do código OAuth | Redirect URI cadastrado no Google Console não bate com a URL real do frontend (`frontend-dev`/`frontend-prod`), ou o secret errado | Conferir passo 11 (as 2 URLs por ambiente) e que o ambiente lê o par de secrets com o sufixo certo |
 | `/admin` não abre para ninguém num ambiente específico | `scripts/seed_admin.py` (passo 14) não foi rodado com o `--environment` certo | Rodar o script apontando pro `--environment` certo (dev ou prod) — lembre que são bancos Firestore diferentes, não é redundante rodar duas vezes |
